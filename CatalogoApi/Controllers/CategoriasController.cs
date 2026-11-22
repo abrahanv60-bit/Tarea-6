@@ -73,6 +73,20 @@ public class CategoriasController : ControllerBase
 
         return CreatedAtAction(nameof(GetById), new { id = categoria.Id }, categoria);
     }
+    [HttpPost]
+    public async Task<IActionResult> CreateDuplicado([FromBody] Categoria categoria)
+    {
+        if (string.IsNullOrWhiteSpace(categoria.Nombre))
+        {
+            return BadRequest(new { mensaje = "El nombre de la categoría es obligatorio." });
+        }
+
+        categoria.CreadoEn = DateTime.UtcNow;
+        _context.Categorias.Add(categoria);
+        await _context.SaveChangesAsync();
+
+        return CreatedAtAction(nameof(GetById), new { id = categoria.Id }, categoria);
+    }
 
     [HttpPut("{id}")]
     public async Task<IActionResult> Update(int id, [FromBody] Categoria categoria)
