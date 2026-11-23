@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
 namespace CatalogoApi.Models;
 
@@ -32,6 +33,7 @@ public class Pelicula
     [Column("categoria_id")]
     public int? CategoriaId { get; set; }
 
+    [JsonIgnore]
     public Categoria? Categoria { get; set; }
 
     [Column("activo")]

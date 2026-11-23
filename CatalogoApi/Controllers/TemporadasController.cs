@@ -1,4 +1,5 @@
 using CatalogoApi.Data;
+using CatalogoApi.Dtos;
 using CatalogoApi.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -19,86 +20,131 @@ public class TemporadasController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll()
+    public async Task<ActionResult<IEnumerable<TemporadaResponseDto>>> GetAll()
     {
         var temporadas = await _context.Temporadas
+            .AsNoTracking()
             .Where(t => t.Activo)
+            .OrderBy(t => t.SerieId)
+            .ThenBy(t => t.Numero)
+            .Select(t => new TemporadaResponseDto
+            {
+                Id = t.Id,
+                Numero = t.Numero,
+                Titulo = t.Titulo,
+                AnioEstreno = t.AnioEstreno,
+                CantidadEpisodios = t.CantidadEpisodios,
+                SerieId = t.SerieId,
+                SerieTitulo = t.Serie.Titulo,
+                Activo = t.Activo,
+                CreadoEn = t.CreadoEn,
+                EliminadoEn = t.EliminadoEn
+            })
             .ToListAsync();
+
         return Ok(temporadas);
     }
 
     [HttpGet("{id}")]
-    public async Task<IActionResult> GetById(int id)
+    public async Task<ActionResult<TemporadaResponseDto>> GetById(int id)
     {
         var temporada = await _context.Temporadas
-            .FirstOrDefaultAsync(t => t.Id == id && t.Activo);
+            .AsNoTracking()
+            .Where(t => t.Id == id && t.Activo)
+            .Select(t => new TemporadaResponseDto
+            {
+                Id = t.Id,
+                Numero = t.Numero,
+                Titulo = t.Titulo,
+                AnioEstreno = t.AnioEstreno,
+                CantidadEpisodios = t.CantidadEpisodios,
+                SerieId = t.SerieId,
+                SerieTitulo = t.Serie.Titulo,
+                Activo = t.Activo,
+                CreadoEn = t.CreadoEn,
+                EliminadoEn = t.EliminadoEn
+            })
+            .FirstOrDefaultAsync();
 
         if (temporada == null)
         {
             return NotFound(new { mensaje = $"Temporada con ID {id} no encontrada." });
         }
+
         return Ok(temporada);
     }
 
     [HttpPost]
-    public async Task<IActionResult> Create([FromBody] Temporada temporada)
+    public async Task<ActionResult<TemporadaResponseDto>> Create([FromBody] TemporadaCreateDto dto)
     {
-        if (string.IsNullOrWhiteSpace(temporada.Titulo))
+        var titulo = dto.Titulo.Trim();
+
+        if (string.IsNullOrWhiteSpace(titulo))
         {
             return BadRequest(new { mensaje = "El título de la temporada es obligatorio." });
         }
 
-        var existeSerie = await _context.Series
-            .AnyAsync(s => s.Id == temporada.SerieId && s.Activo);
-        if (!existeSerie)
+        var serieTitulo = await _context.Series
+            .Where(s => s.Id == dto.SerieId && s.Activo)
+            .Select(s => s.Titulo)
+            .FirstOrDefaultAsync();
+
+        if (serieTitulo == null)
         {
-            return BadRequest(new { mensaje = $"La serie con ID {temporada.SerieId} no existe o está inactiva." });
+            return BadRequest(new { mensaje = $"La serie con ID {dto.SerieId} no existe o está inactiva." });
         }
 
-        temporada.CreadoEn = DateTime.UtcNow;
+        var temporada = new Temporada
+        {
+            Numero = dto.Numero,
+            Titulo = titulo,
+            AnioEstreno = dto.AnioEstreno,
+            CantidadEpisodios = dto.CantidadEpisodios,
+            SerieId = dto.SerieId,
+            Activo = true,
+            CreadoEn = DateTime.UtcNow
+        };
+
         _context.Temporadas.Add(temporada);
         await _context.SaveChangesAsync();
 
-        return CreatedAtAction(nameof(GetById), new { id = temporada.Id }, temporada);
+        return CreatedAtAction(nameof(GetById), new { id = temporada.Id }, ToDto(temporada, serieTitulo));
     }
 
     [HttpPut("{id}")]
-    public async Task<IActionResult> Update(int id, [FromBody] Temporada temporada)
+    public async Task<IActionResult> Update(int id, [FromBody] TemporadaUpdateDto dto)
     {
-        if (id != temporada.Id)
-        {
-            return BadRequest(new { mensaje = "El ID de la ruta no coincide con el ID del cuerpo." });
-        }
-
-        if (string.IsNullOrWhiteSpace(temporada.Titulo))
-        {
-            return BadRequest(new { mensaje = "El título de la temporada es obligatorio." });
-        }
-
         var existing = await _context.Temporadas.FindAsync(id);
         if (existing == null || !existing.Activo)
         {
             return NotFound(new { mensaje = $"Temporada con ID {id} no existe o no se encuentra activa." });
         }
 
-        var existeSerie = await _context.Series
-            .AnyAsync(s => s.Id == temporada.SerieId && s.Activo);
-        if (!existeSerie)
+        var titulo = dto.Titulo.Trim();
+
+        if (string.IsNullOrWhiteSpace(titulo))
         {
-            return BadRequest(new { mensaje = $"La serie con ID {temporada.SerieId} no existe o está inactiva." });
+            return BadRequest(new { mensaje = "El título de la temporada es obligatorio." });
         }
 
-        existing.Numero = temporada.Numero;
-        existing.Titulo = temporada.Titulo;
-        existing.AnioEstreno = temporada.AnioEstreno;
-        existing.CantidadEpisodios = temporada.CantidadEpisodios;
-        existing.SerieId = temporada.SerieId;
-        existing.Activo = temporada.Activo;
-        if (!temporada.Activo && existing.EliminadoEn == null)
+        var existeSerie = await _context.Series
+            .AnyAsync(s => s.Id == dto.SerieId && s.Activo);
+        if (!existeSerie)
         {
-            existing.EliminadoEn = temporada.EliminadoEn ?? DateTime.UtcNow;
+            return BadRequest(new { mensaje = $"La serie con ID {dto.SerieId} no existe o está inactiva." });
         }
-        else if (temporada.Activo)
+
+        existing.Numero = dto.Numero;
+        existing.Titulo = titulo;
+        existing.AnioEstreno = dto.AnioEstreno;
+        existing.CantidadEpisodios = dto.CantidadEpisodios;
+        existing.SerieId = dto.SerieId;
+        existing.Activo = dto.Activo;
+        if (!dto.Activo && existing.EliminadoEn == null)
+        {
+            existing.EliminadoEn = DateTime.UtcNow;
+        }
+        else if (dto.Activo)
         {
             existing.EliminadoEn = null;
         }
@@ -122,4 +168,18 @@ public class TemporadasController : ControllerBase
 
         return NoContent();
     }
+
+    private static TemporadaResponseDto ToDto(Temporada temporada, string? serieTitulo = null) => new()
+    {
+        Id = temporada.Id,
+        Numero = temporada.Numero,
+        Titulo = temporada.Titulo,
+        AnioEstreno = temporada.AnioEstreno,
+        CantidadEpisodios = temporada.CantidadEpisodios,
+        SerieId = temporada.SerieId,
+        SerieTitulo = serieTitulo,
+        Activo = temporada.Activo,
+        CreadoEn = temporada.CreadoEn,
+        EliminadoEn = temporada.EliminadoEn
+    };
 }

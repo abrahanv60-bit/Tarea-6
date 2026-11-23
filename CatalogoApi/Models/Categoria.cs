@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
 namespace CatalogoApi.Models;
 
@@ -26,6 +27,9 @@ public class Categoria
     [Column("eliminado_en")]
     public DateTime? EliminadoEn { get; set; }
 
+    [JsonIgnore]
     public ICollection<Pelicula> Peliculas { get; set; } = new List<Pelicula>();
+
+    [JsonIgnore]
     public ICollection<Serie> Series { get; set; } = new List<Serie>();
 }

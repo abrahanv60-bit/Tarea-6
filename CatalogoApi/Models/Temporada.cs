@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
 namespace CatalogoApi.Models;
 
@@ -26,6 +27,7 @@ public class Temporada
     [Column("serie_id")]
     public int SerieId { get; set; }
 
+    [JsonIgnore]
     public Serie Serie { get; set; } = null!;
 
     [Column("activo")]

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
 using System.Security.Claims;
+using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -25,8 +26,15 @@ foreach (var envPath in envPaths)
 }
 
 // Add services to the container.
-builder.Services.AddControllers();
+// La API responde con DTOs; IgnoreCycles queda como red de seguridad para no
+// volver a fallar con JsonException si alguna entidad se serializa por error.
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
+    });
 builder.Services.AddOpenApi();
+builder.Services.AddProblemDetails();
 
 var connectionString = Environment.GetEnvironmentVariable("DB_CONNECTION_STRING") ?? "Data Source=catalogo.db";
 builder.Services.AddDbContext<AppDbContext>(options =>
@@ -162,6 +170,8 @@ builder.Services.AddAuthentication(options =>
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
+app.UseExceptionHandler();
+
 app.MapOpenApi();
 app.MapScalarApiReference();
 

@@ -1,4 +1,5 @@
 using CatalogoApi.Data;
+using CatalogoApi.Dtos;
 using CatalogoApi.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -19,43 +20,76 @@ public class CategoriasController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll()
+    public async Task<ActionResult<IEnumerable<CategoriaResponseDto>>> GetAll()
     {
         var categorias = await _context.Categorias
+            .AsNoTracking()
             .Where(c => c.Activo)
+            .OrderBy(c => c.Nombre)
+            .Select(c => new CategoriaResponseDto
+            {
+                Id = c.Id,
+                Nombre = c.Nombre,
+                Descripcion = c.Descripcion,
+                Activo = c.Activo,
+                CreadoEn = c.CreadoEn,
+                EliminadoEn = c.EliminadoEn
+            })
             .ToListAsync();
+
         return Ok(categorias);
     }
 
     [HttpGet("{id}")]
-    public async Task<IActionResult> GetById(int id)
+    public async Task<ActionResult<CategoriaResponseDto>> GetById(int id)
     {
         var categoria = await _context.Categorias
-            .FirstOrDefaultAsync(c => c.Id == id && c.Activo);
+            .AsNoTracking()
+            .Where(c => c.Id == id && c.Activo)
+            .Select(c => new CategoriaResponseDto
+            {
+                Id = c.Id,
+                Nombre = c.Nombre,
+                Descripcion = c.Descripcion,
+                Activo = c.Activo,
+                CreadoEn = c.CreadoEn,
+                EliminadoEn = c.EliminadoEn
+            })
+            .FirstOrDefaultAsync();
 
         if (categoria == null)
         {
             return NotFound(new { mensaje = $"Categoría con ID {id} no encontrada." });
         }
+
         return Ok(categoria);
     }
 
     [HttpPost]
-    public async Task<IActionResult> Create([FromBody] Categoria categoria)
+    public async Task<ActionResult<CategoriaResponseDto>> Create([FromBody] CategoriaCreateDto dto)
     {
-        if (string.IsNullOrWhiteSpace(categoria.Nombre))
+        var nombre = dto.Nombre.Trim();
+
+        if (string.IsNullOrWhiteSpace(nombre))
         {
             return BadRequest(new { mensaje = "El nombre de la categoría es obligatorio." });
         }
 
         var existeNombre = await _context.Categorias
-            .AnyAsync(c => c.Nombre.ToLower() == categoria.Nombre.Trim().ToLower());
+            .AnyAsync(c => c.Nombre.ToLower() == nombre.ToLower());
         if (existeNombre)
         {
-            return Conflict(new { mensaje = $"Ya existe una categoría con el nombre '{categoria.Nombre}'." });
+            return Conflict(new { mensaje = $"Ya existe una categoría con el nombre '{nombre}' (activa o eliminada)." });
         }
 
-        categoria.CreadoEn = DateTime.UtcNow;
+        var categoria = new Categoria
+        {
+            Nombre = nombre,
+            Descripcion = Normalizar(dto.Descripcion),
+            Activo = true,
+            CreadoEn = DateTime.UtcNow
+        };
+
         _context.Categorias.Add(categoria);
 
         try
@@ -64,50 +98,47 @@ public class CategoriasController : ControllerBase
         }
         catch (DbUpdateException)
         {
-            if (await _context.Categorias.AnyAsync(c => c.Nombre.ToLower() == categoria.Nombre.Trim().ToLower()))
+            if (await _context.Categorias.AnyAsync(c => c.Nombre.ToLower() == nombre.ToLower()))
             {
-                return Conflict(new { mensaje = $"Ya existe una categoría con el nombre '{categoria.Nombre}'." });
+                return Conflict(new { mensaje = $"Ya existe una categoría con el nombre '{nombre}' (activa o eliminada)." });
             }
             throw;
         }
 
-        return CreatedAtAction(nameof(GetById), new { id = categoria.Id }, categoria);
+        return CreatedAtAction(nameof(GetById), new { id = categoria.Id }, ToDto(categoria));
     }
 
     [HttpPut("{id}")]
-    public async Task<IActionResult> Update(int id, [FromBody] Categoria categoria)
+    public async Task<IActionResult> Update(int id, [FromBody] CategoriaUpdateDto dto)
     {
-        if (id != categoria.Id)
-        {
-            return BadRequest(new { mensaje = "El ID de la ruta no coincide con el ID del cuerpo." });
-        }
-
-        if (string.IsNullOrWhiteSpace(categoria.Nombre))
-        {
-            return BadRequest(new { mensaje = "El nombre de la categoría es obligatorio." });
-        }
-
         var existing = await _context.Categorias.FindAsync(id);
         if (existing == null || !existing.Activo)
         {
             return NotFound(new { mensaje = $"Categoría con ID {id} no existe o no se encuentra activa." });
         }
 
-        var existeNombre = await _context.Categorias
-            .AnyAsync(c => c.Id != id && c.Nombre.ToLower() == categoria.Nombre.Trim().ToLower());
-        if (existeNombre)
+        var nombre = dto.Nombre.Trim();
+
+        if (string.IsNullOrWhiteSpace(nombre))
         {
-            return Conflict(new { mensaje = $"Ya existe otra categoría con el nombre '{categoria.Nombre}'." });
+            return BadRequest(new { mensaje = "El nombre de la categoría es obligatorio." });
         }
 
-        existing.Nombre = categoria.Nombre;
-        existing.Descripcion = categoria.Descripcion;
-        existing.Activo = categoria.Activo;
-        if (!categoria.Activo && existing.EliminadoEn == null)
+        var existeNombre = await _context.Categorias
+            .AnyAsync(c => c.Id != id && c.Nombre.ToLower() == nombre.ToLower());
+        if (existeNombre)
         {
-            existing.EliminadoEn = categoria.EliminadoEn ?? DateTime.UtcNow;
+            return Conflict(new { mensaje = $"Ya existe otra categoría con el nombre '{nombre}'." });
         }
-        else if (categoria.Activo)
+
+        existing.Nombre = nombre;
+        existing.Descripcion = Normalizar(dto.Descripcion);
+        existing.Activo = dto.Activo;
+        if (!dto.Activo && existing.EliminadoEn == null)
+        {
+            existing.EliminadoEn = DateTime.UtcNow;
+        }
+        else if (dto.Activo)
         {
             existing.EliminadoEn = null;
         }
@@ -118,15 +149,16 @@ public class CategoriasController : ControllerBase
         }
         catch (DbUpdateException)
         {
-            if (await _context.Categorias.AnyAsync(c => c.Id != id && c.Nombre.ToLower() == categoria.Nombre.Trim().ToLower()))
+            if (await _context.Categorias.AnyAsync(c => c.Id != id && c.Nombre.ToLower() == nombre.ToLower()))
             {
-                return Conflict(new { mensaje = $"Ya existe otra categoría con el nombre '{categoria.Nombre}'." });
+                return Conflict(new { mensaje = $"Ya existe otra categoría con el nombre '{nombre}'." });
             }
             throw;
         }
 
         return NoContent();
     }
+
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(int id)
     {
@@ -142,4 +174,17 @@ public class CategoriasController : ControllerBase
 
         return NoContent();
     }
+
+    private static string? Normalizar(string? valor)
+        => string.IsNullOrWhiteSpace(valor) ? null : valor.Trim();
+
+    private static CategoriaResponseDto ToDto(Categoria categoria) => new()
+    {
+        Id = categoria.Id,
+        Nombre = categoria.Nombre,
+        Descripcion = categoria.Descripcion,
+        Activo = categoria.Activo,
+        CreadoEn = categoria.CreadoEn,
+        EliminadoEn = categoria.EliminadoEn
+    };
 }
