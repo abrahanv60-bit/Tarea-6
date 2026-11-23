@@ -118,12 +118,13 @@ public class PeliculasController : ControllerBase
     public async Task<IActionResult> Delete(int id)
     {
         var pelicula = await _context.Peliculas.FindAsync(id);
-        if (pelicula == null)
+        if (pelicula == null || !pelicula.Activo)
         {
-            return NotFound(new { mensaje = $"Película con ID {id} no encontrada." });
+            return NotFound(new { mensaje = $"Película con ID {id} no existe o ya no se encuentra activa." });
         }
 
-        _context.Peliculas.Remove(pelicula);
+        pelicula.Activo = false;
+        pelicula.EliminadoEn = DateTime.UtcNow;
         await _context.SaveChangesAsync();
 
         return NoContent();

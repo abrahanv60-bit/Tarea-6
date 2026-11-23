@@ -111,12 +111,13 @@ public class TemporadasController : ControllerBase
     public async Task<IActionResult> Delete(int id)
     {
         var temporada = await _context.Temporadas.FindAsync(id);
-        if (temporada == null)
+        if (temporada == null || !temporada.Activo)
         {
-            return NotFound(new { mensaje = $"Temporada con ID {id} no encontrada." });
+            return NotFound(new { mensaje = $"Temporada con ID {id} no existe o ya no se encuentra activa." });
         }
 
-        _context.Temporadas.Remove(temporada);
+        temporada.Activo = false;
+        temporada.EliminadoEn = DateTime.UtcNow;
         await _context.SaveChangesAsync();
 
         return NoContent();

@@ -131,12 +131,13 @@ public class CategoriasController : ControllerBase
     public async Task<IActionResult> Delete(int id)
     {
         var categoria = await _context.Categorias.FindAsync(id);
-        if (categoria == null)
+        if (categoria == null || !categoria.Activo)
         {
-            return NotFound(new { mensaje = $"Categoría con ID {id} no encontrada." });
+            return NotFound(new { mensaje = $"Categoría con ID {id} no existe o ya no se encuentra activa." });
         }
 
-        _context.Categorias.Remove(categoria);
+        categoria.Activo = false;
+        categoria.EliminadoEn = DateTime.UtcNow;
         await _context.SaveChangesAsync();
 
         return NoContent();

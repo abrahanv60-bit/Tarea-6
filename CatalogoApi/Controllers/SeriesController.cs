@@ -117,12 +117,13 @@ public class SeriesController : ControllerBase
     public async Task<IActionResult> Delete(int id)
     {
         var serie = await _context.Series.FindAsync(id);
-        if (serie == null)
+        if (serie == null || !serie.Activo)
         {
-            return NotFound(new { mensaje = $"Serie con ID {id} no encontrada." });
+            return NotFound(new { mensaje = $"Serie con ID {id} no existe o ya no se encuentra activa." });
         }
 
-        _context.Series.Remove(serie);
+        serie.Activo = false;
+        serie.EliminadoEn = DateTime.UtcNow;
         await _context.SaveChangesAsync();
 
         return NoContent();
