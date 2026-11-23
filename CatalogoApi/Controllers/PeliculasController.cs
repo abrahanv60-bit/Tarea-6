@@ -65,7 +65,7 @@ public class PeliculasController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = pelicula.Id }, pelicula);
     }
 
-    [HttpPut("{id}")]
+   [HttpPut("{id}")]
     public async Task<IActionResult> Update(int id, [FromBody] Pelicula pelicula)
     {
         if (id != pelicula.Id)
@@ -79,9 +79,9 @@ public class PeliculasController : ControllerBase
         }
 
         var existing = await _context.Peliculas.FindAsync(id);
-        if (existing == null)
+        if (existing == null || !existing.Activo)
         {
-            return NotFound(new { mensaje = $"Película con ID {id} no encontrada." });
+            return NotFound(new { mensaje = $"Película con ID {id} no existe o no se encuentra activa." });
         }
 
         if (pelicula.CategoriaId.HasValue)
@@ -102,15 +102,18 @@ public class PeliculasController : ControllerBase
         existing.PosterUrl = pelicula.PosterUrl;
         existing.CategoriaId = pelicula.CategoriaId;
         existing.Activo = pelicula.Activo;
-        if (pelicula.EliminadoEn != null)
+        if (!pelicula.Activo && existing.EliminadoEn == null)
         {
-            existing.EliminadoEn = pelicula.EliminadoEn;
+            existing.EliminadoEn = pelicula.EliminadoEn ?? DateTime.UtcNow;
+        }
+        else if (pelicula.Activo)
+        {
+            existing.EliminadoEn = null;
         }
 
         await _context.SaveChangesAsync();
         return NoContent();
     }
-
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(int id)
     {

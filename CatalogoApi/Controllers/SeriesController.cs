@@ -65,7 +65,7 @@ public class SeriesController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = serie.Id }, serie);
     }
 
-    [HttpPut("{id}")]
+   [HttpPut("{id}")]
     public async Task<IActionResult> Update(int id, [FromBody] Serie serie)
     {
         if (id != serie.Id)
@@ -79,9 +79,9 @@ public class SeriesController : ControllerBase
         }
 
         var existing = await _context.Series.FindAsync(id);
-        if (existing == null)
+        if (existing == null || !existing.Activo)
         {
-            return NotFound(new { mensaje = $"Serie con ID {id} no encontrada." });
+            return NotFound(new { mensaje = $"Serie con ID {id} no existe o no se encuentra activa." });
         }
 
         if (serie.CategoriaId.HasValue)
@@ -101,15 +101,18 @@ public class SeriesController : ControllerBase
         existing.PosterUrl = serie.PosterUrl;
         existing.CategoriaId = serie.CategoriaId;
         existing.Activo = serie.Activo;
-        if (serie.EliminadoEn != null)
+        if (!serie.Activo && existing.EliminadoEn == null)
         {
-            existing.EliminadoEn = serie.EliminadoEn;
+            existing.EliminadoEn = serie.EliminadoEn ?? DateTime.UtcNow;
+        }
+        else if (serie.Activo)
+        {
+            existing.EliminadoEn = null;
         }
 
         await _context.SaveChangesAsync();
         return NoContent();
     }
-
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(int id)
     {

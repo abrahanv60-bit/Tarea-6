@@ -76,9 +76,9 @@ public class TemporadasController : ControllerBase
         }
 
         var existing = await _context.Temporadas.FindAsync(id);
-        if (existing == null)
+        if (existing == null || !existing.Activo)
         {
-            return NotFound(new { mensaje = $"Temporada con ID {id} no encontrada." });
+            return NotFound(new { mensaje = $"Temporada con ID {id} no existe o no se encuentra activa." });
         }
 
         var existeSerie = await _context.Series
@@ -94,9 +94,13 @@ public class TemporadasController : ControllerBase
         existing.CantidadEpisodios = temporada.CantidadEpisodios;
         existing.SerieId = temporada.SerieId;
         existing.Activo = temporada.Activo;
-        if (temporada.EliminadoEn != null)
+        if (!temporada.Activo && existing.EliminadoEn == null)
         {
-            existing.EliminadoEn = temporada.EliminadoEn;
+            existing.EliminadoEn = temporada.EliminadoEn ?? DateTime.UtcNow;
+        }
+        else if (temporada.Activo)
+        {
+            existing.EliminadoEn = null;
         }
 
         await _context.SaveChangesAsync();
